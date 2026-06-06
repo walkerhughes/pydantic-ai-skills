@@ -11,12 +11,14 @@ This folder contains runnable examples demonstrating how to use `pydantic-ai-ski
 | `git_registry_usage.py` | Loads skills from a remote Git repository using `GitSkillsRegistry` (clones Anthropic's public skills repo). |
 | `programatic_skills.py` | Defines a skill entirely in Python using `@skill.resource` / `@skill.script` decorators — HR Analytics Agent backed by a HuggingFace dataset. |
 | `debug_local_logging.py` | Development-focused example that runs file-based skill scripts in-process for breakpoint debugging and writes a local execution log file. |
+| `user_invoked_skills.py` | Interactive CLI demonstrating `disable-model-invocation: true` — a hidden `deploy` skill the model never sees, invoked by the user with `/deploy` (slash-command pattern). |
 
 ### Bundled skills
 
 | Path | Skills |
 |------|--------|
 | `skills/` | `web-research`, `arxiv-search`, `pydanticai-docs` |
+| `skills-user-invoked/` | `deploy` — hidden from the model via `disable-model-invocation: true`, invoked by the user with `/deploy` |
 | `anthropic-skills/` | Anthropic's official skill collection (algorithmic-art, canvas-design, docx, pdf, pptx, slack-gif-creator, webapp-testing, and more) |
 
 ## Prerequisites

@@ -191,3 +191,59 @@ def test_from_file_integer_name_field(tmp_path: Path) -> None:
     skill = Skill.from_file(skill_dir, validate=False)
 
     assert skill.name == '123'
+
+
+def test_skill_disable_model_invocation_defaults_false() -> None:
+    """The disable_model_invocation flag defaults to False."""
+    skill = Skill(name='test-skill', description='A test skill', content='Instructions')
+
+    assert skill.disable_model_invocation is False
+
+
+def test_from_file_disable_model_invocation_true(tmp_path: Path) -> None:
+    """The disable-model-invocation key sets the field and is excluded from metadata."""
+    skill_dir = tmp_path / 'hidden-skill'
+    _write_skill_md(
+        skill_dir,
+        '---\nname: hidden-skill\ndescription: A skill\ndisable-model-invocation: true\nversion: 1.0.0\n---\n\n'
+        'Content.\n',
+    )
+
+    skill = Skill.from_file(skill_dir)
+
+    assert skill.disable_model_invocation is True
+    # The key is a first-class field, not a metadata entry; other unknown keys remain
+    assert skill.metadata == {'version': '1.0.0'}
+
+
+def test_from_file_disable_model_invocation_quoted_string_is_false(tmp_path: Path) -> None:
+    """A quoted 'true' is not a YAML boolean: the flag stays False and a warning is emitted."""
+    skill_dir = tmp_path / 'quoted-skill'
+    _write_skill_md(
+        skill_dir,
+        "---\nname: quoted-skill\ndescription: A skill\ndisable-model-invocation: 'true'\n---\n\nContent.\n",
+    )
+
+    with pytest.warns(UserWarning, match='disable-model-invocation'):
+        skill = Skill.from_file(skill_dir)
+
+    assert skill.disable_model_invocation is False
+
+
+def test_skill_wrapper_to_skill_carries_disable_flag() -> None:
+    """SkillWrapper passes disable_model_invocation through to the Skill."""
+    from pydantic_ai_skills.types import SkillWrapper
+
+    wrapper: SkillWrapper[None] = SkillWrapper(
+        function=lambda: 'Content',
+        name='hidden-skill',
+        description='A hidden skill',
+        license=None,
+        compatibility=None,
+        metadata=None,
+        resources=[],
+        scripts=[],
+        disable_model_invocation=True,
+    )
+
+    assert wrapper.to_skill().disable_model_invocation is True

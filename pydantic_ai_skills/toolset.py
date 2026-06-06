@@ -484,6 +484,10 @@ class SkillsToolset(FunctionToolset[Any]):
                 return s
         return None
 
+    def _visible_skills(self) -> dict[str, Skill]:
+        """Skills advertised to the model (excludes ``disable_model_invocation`` skills)."""
+        return {name: skill for name, skill in self._skills.items() if not skill.disable_model_invocation}
+
     def _register_tools(self) -> None:
         """Register skill management tools with the toolset.
 
@@ -512,9 +516,10 @@ class SkillsToolset(FunctionToolset[Any]):
 
             Returns:
                 Dictionary mapping skill names to their descriptions.
+                Skills hidden from model invocation are not listed.
                 Empty dictionary if no skills are available.
             """
-            return {name: skill.description for name, skill in self._skills.items()}
+            return {name: skill.description for name, skill in self._visible_skills().items()}
 
     def _register_load_skill(self) -> None:
         """Register the load_skill tool."""
@@ -547,7 +552,7 @@ class SkillsToolset(FunctionToolset[Any]):
             """
             _ = ctx  # Required by Pydantic AI toolset protocol
             if skill_name not in self._skills:
-                available = ', '.join(sorted(self._skills.keys())) or 'none'
+                available = ', '.join(sorted(self._visible_skills())) or 'none'
                 raise ModelRetry(
                     f"Skill '{skill_name}' not found. Available skills: {available}. "
                     'Call list_skills to see options and try again with an exact name.'
@@ -619,7 +624,7 @@ class SkillsToolset(FunctionToolset[Any]):
             - Static files don't need args; callables may require them
             """
             if skill_name not in self._skills:
-                available = ', '.join(sorted(self._skills.keys())) or 'none'
+                available = ', '.join(sorted(self._visible_skills())) or 'none'
                 raise ModelRetry(
                     f"Skill '{skill_name}' not found. Available skills: {available}. "
                     'Call list_skills first and try again with an exact name.'
@@ -682,7 +687,7 @@ class SkillsToolset(FunctionToolset[Any]):
             - Execution errors are included in the output
             """
             if skill_name not in self._skills:
-                available = ', '.join(sorted(self._skills.keys())) or 'none'
+                available = ', '.join(sorted(self._visible_skills())) or 'none'
                 raise ModelRetry(
                     f"Skill '{skill_name}' not found. Available skills: {available}. "
                     'Call list_skills first and try again with an exact name.'
@@ -710,21 +715,24 @@ class SkillsToolset(FunctionToolset[Any]):
         When ``auto_reload=True`` was set, re-discovers skills from disk before building
         the prompt so that any edits made since the last run are immediately visible.
 
+        Skills with ``disable_model_invocation=True`` are excluded from the prompt.
+
         Args:
             ctx: The run context for this agent run.
 
         Returns:
-            The skills system prompt, or None if no skills are loaded.
+            The skills system prompt, or None if no model-visible skills are loaded.
         """
         if self._auto_reload:
             self.reload()
 
-        if not self._skills:
+        visible_skills = self._visible_skills()
+        if not visible_skills:
             return None
 
         # Build skills list in XML format
         skills_list_lines: list[str] = []
-        for skill in sorted(self._skills.values(), key=lambda s: s.name):
+        for skill in sorted(visible_skills.values(), key=lambda s: s.name):
             skills_list_lines.append('<skill>')
             skills_list_lines.append(f'<name>{skill.name}</name>')
             skills_list_lines.append(f'<description>{skill.description}</description>')
@@ -750,6 +758,7 @@ class SkillsToolset(FunctionToolset[Any]):
         metadata: dict[str, Any] | None = None,
         resources: list[SkillResource] | None = None,
         scripts: list[SkillScript] | None = None,
+        disable_model_invocation: bool = False,
     ) -> Any:
         """Decorator to define a skill using a function.
 
@@ -791,6 +800,8 @@ class SkillsToolset(FunctionToolset[Any]):
             metadata: Additional metadata fields as a dictionary.
             resources: Initial list of resources to attach to the skill.
             scripts: Initial list of scripts to attach to the skill.
+            disable_model_invocation: Hide this skill from system-prompt advertisement
+                and `list_skills` while keeping it loadable by exact name (defaults to False).
 
         Returns:
             A SkillWrapper instance that can be used to attach resources and scripts.
@@ -831,6 +842,7 @@ class SkillsToolset(FunctionToolset[Any]):
                 metadata=metadata,
                 resources=list(resources) if resources else [],
                 scripts=list(scripts) if scripts else [],
+                disable_model_invocation=disable_model_invocation,
             )
 
             # Convert to Skill once to avoid calling the function twice

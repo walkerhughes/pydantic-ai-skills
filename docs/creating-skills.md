@@ -39,6 +39,14 @@ Instructions for the agent on how to use this skill...
 - `name`: Unique identifier (lowercase, hyphens for spaces)
 - `description`: Brief summary (appears in skill listings)
 
+### Optional Fields
+
+- `license`: License information (e.g., `MIT`)
+- `compatibility`: Environment requirements (≤500 chars)
+- `disable-model-invocation`: Set to `true` to hide the skill from the agent's system prompt and the `list_skills` tool. The skill stays fully usable via `load_skill` when named exactly, and via `toolset.get_skill()` for application-driven (user-invoked) workflows. Must be a YAML boolean — quoted strings like `'true'` emit a validation warning and are treated as `false`. See [User-Invoked Skills](advanced.md#user-invoked-skills-disable-model-invocation).
+
+Any other frontmatter keys are preserved in `skill.metadata`.
+
 ### Naming Conventions
 
 Follow the [Agent Skills](https://agentskills.io/home) naming conventions:
@@ -717,6 +725,8 @@ skill = toolset.get_skill("my-skill")
 print(skill.metadata.extra["version"])  # "1.0.0"
 print(skill.metadata.extra["category"])  # "data-processing"
 ```
+
+Note that `name`, `description`, `license`, `compatibility`, and `disable-model-invocation` are parsed into first-class `Skill` attributes (e.g. `skill.disable_model_invocation`) and do not appear in `skill.metadata`.
 
 ## Testing Skills
 

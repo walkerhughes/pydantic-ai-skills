@@ -143,3 +143,34 @@ def test_validate_skill_metadata_bad_naming_conventions() -> None:
             is_valid = validate_skill_metadata(frontmatter, 'Content')
             assert is_valid is False, f"Name '{name}' should be invalid"
             assert len(w) > 0, f"Name '{name}' should trigger warnings"
+
+
+def test_validate_skill_metadata_disable_model_invocation_non_bool_warns() -> None:
+    """A non-boolean disable-model-invocation value emits a warning."""
+    frontmatter = {
+        'name': 'test-skill',
+        'description': 'Test',
+        'disable-model-invocation': 'true',  # quoted string, not a YAML boolean
+    }
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter('always')
+        is_valid = validate_skill_metadata(frontmatter, 'Content')
+        assert is_valid is False
+        assert len(w) == 1
+        assert 'disable-model-invocation' in str(w[0].message)
+        assert 'YAML boolean' in str(w[0].message)
+
+
+def test_validate_skill_metadata_disable_model_invocation_bool_ok() -> None:
+    """Boolean disable-model-invocation values pass validation without warnings."""
+    for value in (True, False):
+        frontmatter = {
+            'name': 'test-skill',
+            'description': 'Test',
+            'disable-model-invocation': value,
+        }
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            is_valid = validate_skill_metadata(frontmatter, 'Content')
+            assert is_valid is True
+            assert len(w) == 0

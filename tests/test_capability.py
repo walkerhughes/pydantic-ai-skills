@@ -83,3 +83,22 @@ async def test_skills_capability_get_instructions_returns_none() -> None:
     """get_instructions returns None — agent extracts instructions natively from the toolset."""
     capability = SkillsCapability(skills=[])
     assert capability.get_instructions() is None
+
+
+@pytest.mark.asyncio
+async def test_skills_capability_toolset_excludes_disabled_from_instructions() -> None:
+    """Capability delegates to the toolset, so disable_model_invocation parity is automatic."""
+    from unittest.mock import Mock
+
+    from pydantic_ai_skills import Skill
+
+    hidden = Skill(
+        name='hidden-skill',
+        description='A hidden skill',
+        content='Hidden instructions',
+        disable_model_invocation=True,
+    )
+    capability = SkillsCapability(skills=[hidden])
+
+    assert await capability.toolset.get_instructions(Mock()) is None
+    assert capability.toolset.get_skill('hidden-skill').content == 'Hidden instructions'

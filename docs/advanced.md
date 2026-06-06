@@ -288,6 +288,71 @@ Use progressive disclosure: load only what you need, when you need it:
 """
 ```
 
+## User-Invoked Skills (`disable-model-invocation`)
+
+Some skills describe workflows with side effects — deploys, commits, sending messages — where you want the *user*, not the agent, to control when they run. Setting `disable-model-invocation: true` in the SKILL.md frontmatter hides a skill from model-facing discovery:
+
+```yaml
+---
+name: deploy
+description: Deploy the application to production
+disable-model-invocation: true
+---
+
+Deploy the application:
+1. Run the test suite
+2. Build the application
+3. Push to the deployment target
+```
+
+A hidden skill is:
+
+- **Excluded** from the system-prompt advertisement built by `get_instructions()` (including custom `instruction_template` output)
+- **Excluded** from the `list_skills` tool results
+- **Still loadable** via `load_skill`, `read_skill_resource`, and `run_skill_script` when named exactly
+- **Always accessible** programmatically via `toolset.skills` and `toolset.get_skill()`
+
+The value must be a YAML boolean — quoted strings like `'true'` emit a validation warning and are treated as `false`.
+
+Programmatic skills can set the flag directly, on the dataclass or via the decorator:
+
+```python
+from pydantic_ai_skills import Skill, SkillsToolset
+
+deploy = Skill(
+    name='deploy',
+    description='Deploy the application to production',
+    content='Deploy steps...',
+    disable_model_invocation=True,
+)
+toolset = SkillsToolset(skills=[deploy])
+
+@toolset.skill(disable_model_invocation=True)
+def release_notes() -> str:
+    """Generate release notes for the current version."""
+    return 'Release notes workflow...'
+```
+
+### Slash-Command Pattern
+
+The typical application flow detects a user command (e.g. `/deploy`), fetches the hidden skill, and injects its content into the prompt:
+
+```python
+toolset = SkillsToolset(directories=['./skills'])
+
+async def handle_user_input(user_input: str) -> str:
+    if user_input.startswith('/'):
+        command, _, args = user_input[1:].partition(' ')
+        skill = toolset.get_skill(command)  # works even though hidden from the model
+        prompt = f'<skill name="{skill.name}">\n{skill.content}\n</skill>\n\nUser request: {args}'
+    else:
+        prompt = user_input
+    result = await agent.run(prompt)
+    return result.output
+```
+
+Note: if *every* skill in a toolset is hidden, `get_instructions()` returns `None` — no skills header is injected into the system prompt at all.
+
 ## Dependency Injection via RunContext
 
 ### Using RunContext in Resources and Scripts
