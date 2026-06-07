@@ -84,14 +84,17 @@ description: Search arXiv for research papers
 version: 1.0.0
 author: Your Name
 category: research
+disable-model-invocation: true
 ---
 ```
+
+- `disable-model-invocation` - When `true`, the skill is hidden from the agent's system prompt and `list_skills`, but remains loadable by exact name and accessible via `toolset.get_skill()` for user-invoked workflows (see [User-Invoked Skills](advanced.md#user-invoked-skills-disable-model-invocation))
 
 ## Progressive Disclosure
 
 The toolset implements **progressive disclosure** - exposing information only when needed:
 
-1. **Initial**: Skill names and descriptions are added to agent instructions via `get_instructions(ctx)` (called automatically by the framework on newer pydantic-ai versions)
+1. **Initial**: Skill names and descriptions are added to agent instructions via `get_instructions(ctx)` (called automatically by the framework on newer pydantic-ai versions). Skills with `disable-model-invocation: true` are omitted from this step.
 2. **Loading**: Agent calls `load_skill(name)` to get full instructions when needed
 3. **Resources**: Agent calls `read_skill_resource()` for additional documentation
 4. **Execution**: Agent calls `run_skill_script()` to execute scripts

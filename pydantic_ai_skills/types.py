@@ -236,6 +236,11 @@ class Skill:
             this is explicitly set by the filesystem discovery/loading utilities to the resolved directory path;
             it can also be overridden explicitly when constructing a ``Skill``.
         metadata: Additional metadata fields.
+        disable_model_invocation: When True, the skill is hidden from model-facing
+            discovery (system-prompt advertisement and the ``list_skills`` tool) but
+            remains fully usable via ``load_skill``/``read_skill_resource``/
+            ``run_skill_script`` when named explicitly, and via ``toolset.get_skill()``.
+            Parsed from the ``disable-model-invocation`` SKILL.md frontmatter key.
     """
 
     name: str
@@ -247,6 +252,7 @@ class Skill:
     scripts: list[SkillScript] = field(default_factory=list)
     uri: str | None = None
     metadata: dict[str, Any] | None = None
+    disable_model_invocation: bool = False
 
     def __post_init__(self) -> None:
         """Auto-assign a skill:// URI for any Skill instantiated with no URI.
@@ -323,8 +329,13 @@ class Skill:
         license_field = str(license_field) if license_field is not None else None
         compatibility_field = frontmatter.get('compatibility')
         compatibility_field = str(compatibility_field) if compatibility_field is not None else None
+        # Strict: only a YAML boolean `true` enables the flag.  Quoted strings like
+        # 'true' are authoring errors — validate_skill_metadata warns about them.
+        disable_model_invocation = frontmatter.get('disable-model-invocation') is True
         metadata = {
-            k: v for k, v in frontmatter.items() if k not in ('name', 'description', 'license', 'compatibility')
+            k: v
+            for k, v in frontmatter.items()
+            if k not in ('name', 'description', 'license', 'compatibility', 'disable-model-invocation')
         }
 
         if validate:
@@ -344,6 +355,7 @@ class Skill:
             resources=resources,
             scripts=scripts,
             metadata=metadata if metadata else None,
+            disable_model_invocation=disable_model_invocation,
         )
 
     def resource(
@@ -523,6 +535,8 @@ class SkillWrapper(Generic[DepsT]):
         metadata: Additional metadata fields.
         resources: List of resources attached to the skill.
         scripts: List of scripts attached to the skill.
+        disable_model_invocation: When True, the skill is hidden from model-facing
+            discovery but remains loadable by exact name.
     """
 
     def __init__(
@@ -535,6 +549,7 @@ class SkillWrapper(Generic[DepsT]):
         metadata: dict[str, Any] | None,
         resources: list[SkillResource],
         scripts: list[SkillScript],
+        disable_model_invocation: bool = False,
     ) -> None:
         """Initialize the skill wrapper.
 
@@ -547,6 +562,8 @@ class SkillWrapper(Generic[DepsT]):
             metadata: Additional metadata fields.
             resources: Initial list of resources.
             scripts: Initial list of scripts.
+            disable_model_invocation: Hide this skill from system-prompt advertisement
+                and ``list_skills`` while keeping it loadable by exact name.
         """
         self.function = function
         self.name = name
@@ -556,6 +573,7 @@ class SkillWrapper(Generic[DepsT]):
         self.metadata = metadata
         self.resources = list(resources)
         self.scripts = list(scripts)
+        self.disable_model_invocation = disable_model_invocation
 
     def resource(
         self,
@@ -713,4 +731,5 @@ class SkillWrapper(Generic[DepsT]):
             scripts=self.scripts,
             uri=None,  # __post_init__ will assign skill://{name}
             metadata=self.metadata,
+            disable_model_invocation=self.disable_model_invocation,
         )

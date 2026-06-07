@@ -165,7 +165,8 @@ Skill
 ├── resources: list[SkillResource] | None  # Additional resources
 ├── scripts: list[SkillScript] | None      # Executable scripts
 ├── uri: str | None                        # Base path (file-based: set, programmatic: None)
-└── metadata: dict[str, Any] | None        # Custom fields (version, author, license, etc.)
+├── metadata: dict[str, Any] | None        # Custom fields (version, author, license, etc.)
+└── disable_model_invocation: bool         # Hide from model discovery (default False)
 ```
 
 ### SkillResource Structure
@@ -208,6 +209,8 @@ When creating skills, these metadata fields are commonly used:
 | `requires` | `dict[str, str]` | External dependencies |
 | `deprecated` | `bool` | Whether skill is deprecated |
 | `deprecation_message` | `str` | Explanation if deprecated |
+
+Note: the `disable-model-invocation` frontmatter key is parsed into the first-class `Skill.disable_model_invocation` attribute and does not appear in `skill.metadata`. See [User-Invoked Skills](../advanced.md#user-invoked-skills-disable-model-invocation).
 
 ## Usage Examples
 

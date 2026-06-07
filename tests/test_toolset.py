@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from pydantic_ai_skills import SkillsToolset
+from pydantic_ai_skills import Skill, SkillsToolset
 
 
 @pytest.fixture
@@ -770,3 +770,181 @@ def test_run_skill_script_rejects_non_object_json(sample_skills_dir: Path) -> No
                 'args': '[1, 2, 3]',
             }
         )
+
+
+# ============================================================================
+# disable_model_invocation — hidden from discovery, usable by exact name
+# ============================================================================
+
+
+def _visible_and_hidden_skills() -> list[Skill]:
+    """Two skills: one visible, one hidden from model invocation."""
+    return [
+        Skill(name='visible-skill', description='A visible skill', content='Visible instructions'),
+        Skill(
+            name='hidden-skill',
+            description='A hidden skill',
+            content='Hidden instructions',
+            disable_model_invocation=True,
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_instructions_excludes_disabled_skill() -> None:
+    """get_instructions advertises visible skills but not disabled ones."""
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+
+    instructions = await toolset.get_instructions(Mock())
+
+    assert instructions is not None
+    assert 'visible-skill' in instructions
+    assert 'hidden-skill' not in instructions
+
+
+@pytest.mark.asyncio
+async def test_get_instructions_advertises_false_or_missing_key(tmp_path: Path) -> None:
+    """Skills with disable-model-invocation false or absent are auto-invocable: advertised in the prompt."""
+    explicit_false_dir = tmp_path / 'explicit-false'
+    explicit_false_dir.mkdir()
+    (explicit_false_dir / 'SKILL.md').write_text("""---
+name: explicit-false
+description: Key explicitly set to false
+disable-model-invocation: false
+---
+
+Content.
+""")
+    key_missing_dir = tmp_path / 'key-missing'
+    key_missing_dir.mkdir()
+    (key_missing_dir / 'SKILL.md').write_text("""---
+name: key-missing
+description: Key not present at all
+---
+
+Content.
+""")
+
+    toolset = SkillsToolset(directories=[tmp_path])
+
+    assert toolset.get_skill('explicit-false').disable_model_invocation is False
+    assert toolset.get_skill('key-missing').disable_model_invocation is False
+
+    instructions = await toolset.get_instructions(Mock())
+    assert instructions is not None
+    assert 'explicit-false' in instructions
+    assert 'Key explicitly set to false' in instructions
+    assert 'key-missing' in instructions
+    assert 'Key not present at all' in instructions
+
+    listed = await toolset.tools['list_skills'].function(Mock())
+    assert set(listed) == {'explicit-false', 'key-missing'}
+
+
+@pytest.mark.asyncio
+async def test_get_instructions_all_disabled_returns_none() -> None:
+    """When every skill is hidden, get_instructions returns None."""
+    skill = Skill(
+        name='hidden-skill',
+        description='A hidden skill',
+        content='Hidden instructions',
+        disable_model_invocation=True,
+    )
+    toolset = SkillsToolset(skills=[skill])
+
+    assert await toolset.get_instructions(Mock()) is None
+
+
+@pytest.mark.asyncio
+async def test_get_instructions_custom_template_excludes_disabled() -> None:
+    """Custom instruction templates only receive visible skills."""
+    toolset = SkillsToolset(
+        skills=_visible_and_hidden_skills(),
+        instruction_template='Available skills:\n{skills_list}',
+    )
+
+    instructions = await toolset.get_instructions(Mock())
+
+    assert instructions is not None
+    assert 'visible-skill' in instructions
+    assert 'hidden-skill' not in instructions
+
+
+@pytest.mark.asyncio
+async def test_list_skills_excludes_disabled() -> None:
+    """The list_skills tool omits skills hidden from model invocation."""
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+    list_skills = toolset.tools['list_skills'].function
+
+    result = await list_skills(Mock())
+
+    assert 'visible-skill' in result
+    assert 'hidden-skill' not in result
+
+
+@pytest.mark.asyncio
+async def test_load_skill_works_for_disabled_skill() -> None:
+    """A hidden skill still loads when named exactly."""
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+    load_skill = toolset.tools['load_skill'].function
+
+    result = await load_skill(Mock(), 'hidden-skill')
+
+    assert 'hidden-skill' in result
+    assert 'Hidden instructions' in result
+
+
+@pytest.mark.asyncio
+async def test_load_skill_retry_message_excludes_disabled() -> None:
+    """Failed lookups must not leak hidden skill names back to the model."""
+    from pydantic_ai import ModelRetry
+
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+    load_skill = toolset.tools['load_skill'].function
+
+    with pytest.raises(ModelRetry) as exc_info:
+        await load_skill(Mock(), 'does-not-exist')
+
+    msg = str(exc_info.value)
+    assert 'visible-skill' in msg
+    assert 'hidden-skill' not in msg
+
+
+@pytest.mark.asyncio
+async def test_read_skill_resource_retry_message_excludes_disabled() -> None:
+    """read_skill_resource failed lookups must not leak hidden skill names."""
+    from pydantic_ai import ModelRetry
+
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+    read_skill_resource = toolset.tools['read_skill_resource'].function
+
+    with pytest.raises(ModelRetry) as exc_info:
+        await read_skill_resource(Mock(), 'does-not-exist', 'FORMS.md')
+
+    msg = str(exc_info.value)
+    assert 'visible-skill' in msg
+    assert 'hidden-skill' not in msg
+
+
+@pytest.mark.asyncio
+async def test_run_skill_script_retry_message_excludes_disabled() -> None:
+    """run_skill_script failed lookups must not leak hidden skill names."""
+    from pydantic_ai import ModelRetry
+
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+    run_skill_script = toolset.tools['run_skill_script'].function
+
+    with pytest.raises(ModelRetry) as exc_info:
+        await run_skill_script(Mock(), 'does-not-exist', 'script.py')
+
+    msg = str(exc_info.value)
+    assert 'visible-skill' in msg
+    assert 'hidden-skill' not in msg
+
+
+def test_get_skill_and_skills_property_include_disabled() -> None:
+    """Programmatic access (the user-invocation path) still sees hidden skills."""
+    toolset = SkillsToolset(skills=_visible_and_hidden_skills())
+
+    assert 'hidden-skill' in toolset.skills
+    assert toolset.get_skill('hidden-skill').content == 'Hidden instructions'

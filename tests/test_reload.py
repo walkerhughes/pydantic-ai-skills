@@ -228,3 +228,30 @@ async def test_auto_reload_default_is_false(skills_dir: Path) -> None:
     assert 'default-late-skill' not in toolset.skills
     # 'default-late-skill' should not appear in the instructions
     assert instructions is None or 'default-late-skill' not in instructions
+
+
+@pytest.mark.asyncio
+async def test_auto_reload_picks_up_disable_model_invocation_change(skills_dir: Path) -> None:
+    """With auto_reload=True, adding disable-model-invocation on disk hides the skill, removing it shows it."""
+    toolset = SkillsToolset(directories=[skills_dir], auto_reload=True)
+    ctx = MagicMock()
+
+    instructions = await toolset.get_instructions(ctx)
+    assert instructions is not None
+    assert 'existing-skill' in instructions
+
+    # Add the flag on disk: the skill disappears from the next prompt
+    (skills_dir / 'existing-skill' / 'SKILL.md').write_text(
+        '---\nname: existing-skill\ndescription: An existing skill\ndisable-model-invocation: true\n---\n\n'
+        '# existing-skill\n\nInstructions.\n'
+    )
+    instructions = await toolset.get_instructions(ctx)
+    assert instructions is None or 'existing-skill' not in instructions
+    # Still accessible programmatically for user invocation
+    assert toolset.get_skill('existing-skill').disable_model_invocation is True
+
+    # Remove the flag again: the skill reappears
+    _write_skill(skills_dir, 'existing-skill', 'An existing skill')
+    instructions = await toolset.get_instructions(ctx)
+    assert instructions is not None
+    assert 'existing-skill' in instructions

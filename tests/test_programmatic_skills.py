@@ -288,3 +288,23 @@ async def test_skill_script_run_error_no_function() -> None:
 
     with pytest.raises(ValueError, match='has no function'):
         await script.run(None)
+
+
+@pytest.mark.asyncio
+async def test_skill_decorator_disable_model_invocation() -> None:
+    """Decorator-defined skills can be hidden from model invocation and survive reload()."""
+    from unittest.mock import Mock
+
+    toolset = SkillsToolset(skills=[])
+
+    @toolset.skill(disable_model_invocation=True)
+    def hidden_workflow() -> str:
+        """A user-invoked workflow."""
+        return 'Workflow steps...'
+
+    assert toolset.skills['hidden-workflow'].disable_model_invocation is True
+    assert await toolset.get_instructions(Mock()) is None
+
+    # Programmatic skills are preserved on reload, flag included
+    toolset.reload()
+    assert toolset.skills['hidden-workflow'].disable_model_invocation is True

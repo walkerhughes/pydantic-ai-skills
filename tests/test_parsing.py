@@ -110,3 +110,36 @@ metadata:
     assert frontmatter['name'] == 'complex-skill'
     assert frontmatter['tags'] == ['testing', 'example']
     assert frontmatter['metadata']['category'] == 'test'
+
+
+def test_parse_skill_md_disable_model_invocation_boolean() -> None:
+    """YAML boolean true parses to a native bool."""
+    content = """---
+name: test-skill
+description: Test
+disable-model-invocation: true
+---
+
+Content.
+"""
+
+    frontmatter, _ = parse_skill_md(content)
+
+    assert frontmatter['disable-model-invocation'] is True
+
+
+def test_parse_skill_md_disable_model_invocation_quoted_string() -> None:
+    """A quoted 'true' stays a string — strict parsing treats it as false."""
+    content = """---
+name: test-skill
+description: Test
+disable-model-invocation: 'true'
+---
+
+Content.
+"""
+
+    frontmatter, _ = parse_skill_md(content)
+
+    assert frontmatter['disable-model-invocation'] == 'true'
+    assert isinstance(frontmatter['disable-model-invocation'], str)

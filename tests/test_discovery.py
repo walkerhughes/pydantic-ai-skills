@@ -304,3 +304,22 @@ def test_skills_directory_missing_name_without_validation(tmp_path: Path) -> Non
 
     assert len(skills) == 1
     assert skills[0].name == 'my-skill'
+
+
+def test_discover_skills_disable_model_invocation(tmp_path: Path) -> None:
+    """The disable-model-invocation frontmatter key flows through discovery."""
+    skill_dir = tmp_path / 'hidden-skill'
+    skill_dir.mkdir()
+    (skill_dir / 'SKILL.md').write_text("""---
+name: hidden-skill
+description: A hidden skill
+disable-model-invocation: true
+---
+
+Content.
+""")
+
+    skills = discover_skills(tmp_path, validate=True)
+
+    assert len(skills) == 1
+    assert skills[0].disable_model_invocation is True

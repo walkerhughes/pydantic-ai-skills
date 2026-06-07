@@ -141,6 +141,16 @@ def validate_skill_metadata(
         )
         is_valid = False
 
+    disable_model_invocation = frontmatter.get('disable-model-invocation')
+    if disable_model_invocation is not None and not isinstance(disable_model_invocation, bool):
+        warnings.warn(
+            f"Skill '{name}'{location}: 'disable-model-invocation' should be a YAML boolean (true/false), "
+            f'got {type(disable_model_invocation).__name__} {disable_model_invocation!r}; treating it as false',
+            UserWarning,
+            stacklevel=2,
+        )
+        is_valid = False
+
     line_count = len(instructions.split('\n'))
     if line_count > 500:
         warnings.warn(
